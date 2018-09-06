@@ -3,6 +3,8 @@
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm>
+#include <iterator>
 
 #include <cstring>
 
@@ -23,6 +25,7 @@ bool isDirectory(const char*);
 set<char> getArgs(int, char**);
 vector<string> getParams(int, char**);
 string resolvePath(string);
+bool copyFile(istream&, ostream&);
 
 int main(int argc, char* argv[]) {
     // Configure arguments
@@ -52,20 +55,11 @@ int main(int argc, char* argv[]) {
 
     // If input is piped, copy
     if (args.count('c') || args.count('C')) {
-        unsigned int size = 0;
-        ofstream output;
-        output.open(DEFAULT_CLIPBOARD_PATH);
-        if (!output.is_open()) {
-            cerr << "Unable to open IJCP clipboard" << endl;
-            return -2;
-        }
-        string word;
-        if (getline(cin, word, '\0')) {
-            output << word;
-            size += word.length();
+        ofstream output(DEFAULT_CLIPBOARD_PATH, ios::binary);
+        if (!copyFile(cin, output)) {
+            return -1;
         }
         output.close();
-        cout << "\nCopied " << size << " bytes to clipboard" << endl;
     }
     else if (args.count('p') || args.count('P')) {
         if (args.count('o') || args.count('O')) {
@@ -77,20 +71,16 @@ int main(int argc, char* argv[]) {
                 if (VERBOSE) {
                     cout << "Outputting to " << fileName << "... ";
                 }
-                ifstream input;
-                input.open(DEFAULT_CLIPBOARD_PATH);
-                if (!input.is_open()) {
-                    cerr << "Unable to open " << DEFAULT_CLIPBOARD_PATH << endl;
-                }
-                ofstream output;
-                output.open(fileName);
+                ifstream input(DEFAULT_CLIPBOARD_PATH, ios::binary);
+                ofstream output(fileName, ios::binary);
                 if (!output.is_open()) {
-                    cerr << "Unable to open " << fileName << endl;
+                    cerr << "Could not open " + fileName << endl;
+                    return -1;
                 }
-                string word;
-                if (getline(input, word, '\0')) {
-                    output << word;
+                if (!copyFile(input, output)) {
+                    return -1;
                 }
+                input.close();
                 output.close();
                 if (VERBOSE) {
                     cout << "Done." << endl;
@@ -98,14 +88,9 @@ int main(int argc, char* argv[]) {
             }
         }
         else {
-            ifstream input;
-            input.open(DEFAULT_CLIPBOARD_PATH);
-            if (!input.is_open()) {
-                cerr << "Unable to open " << DEFAULT_CLIPBOARD_PATH << endl;
-            }
-            string word;
-            if (getline(input, word, '\0')) {
-                cout << word;
+            ifstream input(DEFAULT_CLIPBOARD_PATH, ios::binary);
+            if (!copyFile(input, cout)) {
+                return -1;
             }
             input.close();
         }
@@ -115,26 +100,17 @@ int main(int argc, char* argv[]) {
             cerr << "Input filename required" << endl;
             return -1;
         }
-        ifstream input;
-        input.open(params[0]);
+        ifstream input(params[0], ios::binary);
+        ofstream output(DEFAULT_CLIPBOARD_PATH, ios::binary);
         if (!input.is_open()) {
-            cerr << "Unable to open " << params[0] << endl;
+            cerr << "Could not open " + params[0] << endl;
+            return -1;
         }
-        ofstream output;
-        output.open(DEFAULT_CLIPBOARD_PATH.c_str());
-        if (!output.is_open()) {
-            cerr << "Unable to open IJCP clipboard" << endl;
-            return -2;
-        }
-        int size;
-        string word;
-        if (getline(input, word, '\0')) {
-            output << word;
-            size += word.length();
+        if (!copyFile(input, output)) {
+            return -1;
         }
         input.close();
         output.close();
-        cout << "\nCopied " << size << " bytes to clipboard" << endl;
     }
 
     return 0;
@@ -174,4 +150,14 @@ string resolvePath(string path) {
     if (path.length() < 2) return "";
     if (path[0] == '.') return string("pwd") + path.substr(1);
     if (path[0] == '~') return string(getenv("HOME")) + path.substr(1);
+}
+
+bool copyFile(istream& input, ostream& output) {
+
+    istreambuf_iterator<char> begin_from(input);
+    istreambuf_iterator<char> end_from;
+    ostreambuf_iterator<char> begin_to(output);
+
+    copy(begin_from, end_from, begin_to);
+    return true;
 }
